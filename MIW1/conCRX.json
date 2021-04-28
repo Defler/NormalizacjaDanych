@@ -1,19 +1,24 @@
 {
-  "nazwa": "bcw",
-  "iloscKolumn": 11,
-  "iloscWierszy": 699,
+  "nazwa": "crx",
+  "iloscKolumn": 16,
+  "iloscWierszy": 690,
   "separator": ",",
   "rodzajKolumny": [
+    "znak",
     "liczba",
     "liczba",
+    "znak",
+    "znak",
+    "znak",
+    "znak",
+    "liczba",
+    "znak",
+    "znak",
+    "liczba",
+    "znak",
+    "znak",
     "liczba",
     "liczba",
-    "liczba",
-    "liczba",
-    "liczba",
-    "liczba",
-    "liczba",
-    "liczba",
-    "liczba"
+    "znak"
   ]
 }

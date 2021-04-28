@@ -56,102 +56,162 @@ namespace MIW1
             StreamReader fileZnaki = File.OpenText("conZnakiNaLiczby.json");
             Dictionary<string, double> tabZnakiNaLiczby = (Dictionary<string, double>)serializer.Deserialize(fileZnaki, typeof(Dictionary<string,double>));
 
+
+            char wczytanyZnak;
+            string nazwaSetu;
+            string nazwaConfigu;
+
+            //menu
+            Console.WriteLine("Witaj drogi uzytkowniku! Wybierz odpowiednia cyfre: ");
+            Console.WriteLine("Australian - 1 / BCW - 2 / CRX - 3");
+            wczytanyZnak = Console.ReadKey().KeyChar;
+
+            if (wczytanyZnak == '1')
+            {
+                nazwaSetu = "australian.dat";
+                nazwaConfigu = "conAustralian.json";
+            }
+            else if(wczytanyZnak == '2')
+            {
+                nazwaSetu = "breast-cancer-wisconsin.data";
+                nazwaConfigu = "conBCW.json";
+            }
+            else if(wczytanyZnak == '3')
+            {
+                nazwaSetu = "crx.data";
+                nazwaConfigu = "conCRX.json";
+            }
+            else
+            {
+                Console.WriteLine("Wybrano znak spoza zakresu!!!");
+                Console.WriteLine("Ustawiono wartosc domyslna - Australian");
+                nazwaSetu = "australian.dat";
+                nazwaConfigu = "conAustralian.json";
+            }
+            Console.WriteLine();
+
+
+
             //wczytanie configa z danymi o secie
-            StreamReader fileDane = File.OpenText("conAustralian.json");
+            StreamReader fileDane = File.OpenText(nazwaConfigu);
             AustralianConfig config = (AustralianConfig)serializer.Deserialize(fileDane, typeof(AustralianConfig));
 
             //tworzenie 3 dataTabli: jeden z surowymi danymi (jak w secie), drugi z zamienionymi znakami na liczby, trzeci ze znormalizowanymi danymi
             System.Data.DataTable dane = new DataTable("TablicaDanych");
             System.Data.DataTable daneLiczbowe = new DataTable("TablicaDanychLiczbowych");
             System.Data.DataTable daneZnormalizowane = new DataTable("TablicaDanychZnormalizowanych");
-            
+
+            List<int> indeksyBledow = new List<int>();
+            int indeksBledu = 0;
 
             UstawienieDataSetu(dane, config.rodzajKolumny, config.iloscKolumn, config.iloscWierszy, true);
 
             //zapisywanie danych do dataTable
-            string[] load = System.IO.File.ReadAllLines("australian.dat");
+            string[] load = System.IO.File.ReadAllLines(nazwaSetu);
             int nrWiersza = 0;
             string[] wiersz;
 
             foreach (string line in load)
             {
+                //jezeli jest '?' to linia jest pomijana a jej indeks trafia do listy z bledami
+                if (line.Contains('?'))
+                {
+                    indeksyBledow.Add(indeksBledu);
+                    indeksBledu++;
+                    continue;
+                }
+
                 wiersz = line.Split(config.separator);
                 for (int i = 0; i < wiersz.Length; i++)
                 {
                     wiersz[i] = wiersz[i].Replace('.', ',');
-                    dane.Rows[nrWiersza][i] = Convert.ToDouble(wiersz[i]);
+                    if (config.rodzajKolumny[i] == "znak")
+                        dane.Rows[nrWiersza][i] = wiersz[i];
+                    else
+                        dane.Rows[nrWiersza][i] = Convert.ToDouble(wiersz[i]);
                 }
                 nrWiersza++;
+                indeksBledu++;
             }
 
-            UstawienieDataSetu(daneLiczbowe, config.rodzajKolumny, config.iloscKolumn, config.iloscWierszy, false);
+            //ustawianie wartosci w danychLiczbowych - ewentualne zamienianie znakow na liczby
+            UstawienieDataSetu(daneLiczbowe, config.rodzajKolumny, config.iloscKolumn, config.iloscWierszy-indeksyBledow.Count, false);
             for (int i=0; i<config.iloscKolumn; i++)
             {
-                for(int j=0; j<config.iloscWierszy; j++)
+                for(int j=0; j< config.iloscWierszy - indeksyBledow.Count; j++)
                 {
                     if (config.rodzajKolumny[i] == "znak")
-                        daneLiczbowe.Rows[j][i] = tabZnakiNaLiczby[dane.Rows[j].Field<string>(j)];
+                        daneLiczbowe.Rows[j][i] = tabZnakiNaLiczby[dane.Rows[j].Field<string>(i)];
                     else
                         daneLiczbowe.Rows[j][i] = dane.Rows[j][i];
                 }
             }
 
-            //tworzenie tablic przetrzymujacych minimalne i maksymalne wartosci w kolumnach
-            double[] tabMin = new double[config.iloscKolumn];
-            double[] tabMax = new double[config.iloscKolumn];
+            Console.WriteLine("Czy znormalizowac dane? [y / n]");
+            char czyNormalizacja = Console.ReadKey().KeyChar;
 
-            //ustawianie startowych wartosci dla tablic
-            for(int i=0; i<config.iloscKolumn; i++)
+            if(czyNormalizacja == 'y')
             {
-                tabMin[i] = Convert.ToDouble(daneLiczbowe.Rows[0][i]);
-                tabMax[i] = Convert.ToDouble(daneLiczbowe.Rows[0][i]);
-            }
+                //tworzenie tablic przetrzymujacych minimalne i maksymalne wartosci w kolumnach
+                double[] tabMin = new double[config.iloscKolumn];
+                double[] tabMax = new double[config.iloscKolumn];
 
-            //wyszukiwanie wartosci min/max dla tablic
-            for(int i=0; i<config.iloscKolumn; i++)
-            {
-                for(int j=1; j<config.iloscWierszy; j++)
+                //ustawianie startowych wartosci dla tablic
+                for (int i = 0; i < config.iloscKolumn; i++)
                 {
-                    if (daneLiczbowe.Rows[j].Field<double>(i) < tabMin[i])
-                        tabMin[i] = daneLiczbowe.Rows[j].Field<double>(i);
-                    if (daneLiczbowe.Rows[j].Field<double>(i) > tabMax[i])
-                        tabMax[i] = daneLiczbowe.Rows[j].Field<double>(i);
+                    tabMin[i] = Convert.ToDouble(daneLiczbowe.Rows[0][i]);
+                    tabMax[i] = Convert.ToDouble(daneLiczbowe.Rows[0][i]);
+                }
+
+                //wyszukiwanie wartosci min/max dla tablic
+                for (int i = 0; i < config.iloscKolumn; i++)
+                {
+                    for (int j = 1; j < config.iloscWierszy - indeksyBledow.Count; j++)
+                    {
+                        if (daneLiczbowe.Rows[j].Field<double>(i) < tabMin[i])
+                            tabMin[i] = daneLiczbowe.Rows[j].Field<double>(i);
+                        if (daneLiczbowe.Rows[j].Field<double>(i) > tabMax[i])
+                            tabMax[i] = daneLiczbowe.Rows[j].Field<double>(i);
+                    }
+                }
+
+                UstawienieDataSetu(daneZnormalizowane, config.rodzajKolumny, config.iloscKolumn, config.iloscWierszy - indeksyBledow.Count, false);
+
+                //normalizacja danych
+                for (int i = 0; i < config.iloscWierszy - indeksyBledow.Count; i++)
+                {
+                    for (int j = 0; j < config.iloscKolumn; j++)
+                    {
+                        daneZnormalizowane.Rows[i][j] = (daneLiczbowe.Rows[i].Field<double>(j) - tabMin[j]) / (tabMax[j] - tabMin[j]);
+                    }
+                }
+
+                Console.WriteLine("\n\nDane znormalizowane: ");
+                for (int i = 0; i < daneZnormalizowane.Rows.Count; i++)
+                {
+                    for (int j = 0; j < daneZnormalizowane.Columns.Count; j++)
+                        Console.Write($"{Math.Round(daneZnormalizowane.Rows[i].Field<double>(j), 2)} ");
+                    Console.WriteLine();
+                }
+            }
+            else
+            {
+                Console.WriteLine("\n\nDane liczbowe: \n");
+                for(int i=0; i<config.iloscWierszy - indeksyBledow.Count; i++)
+                {
+                    for(int j=0; j<config.iloscKolumn; j++)
+                    {
+                        Console.Write($"{Math.Round(daneLiczbowe.Rows[i].Field<double>(j), 2)} ");
+                    }
+                    Console.WriteLine();
                 }
             }
 
-
-            UstawienieDataSetu(daneZnormalizowane, config.rodzajKolumny, config.iloscKolumn, config.iloscWierszy, false);
-
-            //normalizacja danych
-            for(int i=0; i<config.iloscWierszy; i++)
-            {
-                for(int j=0; j<config.iloscKolumn; j++)
-                {
-                    daneZnormalizowane.Rows[i][j] = (daneLiczbowe.Rows[i].Field<double>(j) - tabMin[j]) / (tabMax[j] - tabMin[j]);
-                }
-            }
-            
-
-
-            /*
-            for (int i=0; i<tabMax.Length; i++)
-            {
-                Console.Write($"{tabMin[i]} ");
-            }
-            */
-
-
-            
-            for(int i=0; i<daneZnormalizowane.Rows.Count; i++)
-            {
-                for (int j = 0; j < daneZnormalizowane.Columns.Count; j++)
-                    Console.Write($"{Math.Round(daneZnormalizowane.Rows[i].Field<double>(j),2)} ");
-                Console.WriteLine();
-            }
-            
-
-            Console.WriteLine($"Nazwa : {nrWiersza}");
+            Console.WriteLine($"Ilosc wierszy : {nrWiersza}");
             //Console.WriteLine($"q: {tabZnakiNaLiczby["q"]}");
+            Console.WriteLine("Brak wartosci w wierszach: ");
+            foreach (int indeks in indeksyBledow)
+                Console.Write($"{indeks} ");
             System.Console.ReadKey();
         }
     }
