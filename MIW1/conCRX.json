@@ -1,0 +1,19 @@
+{
+  "nazwa": "bcw",
+  "iloscKolumn": 11,
+  "iloscWierszy": 699,
+  "separator": ",",
+  "rodzajKolumny": [
+    "liczba",
+    "liczba",
+    "liczba",
+    "liczba",
+    "liczba",
+    "liczba",
+    "liczba",
+    "liczba",
+    "liczba",
+    "liczba",
+    "liczba"
+  ]
+}

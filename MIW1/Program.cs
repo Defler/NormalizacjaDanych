@@ -12,47 +12,70 @@ namespace MIW1
         public int iloscKolumn { get; set; }
         public int iloscWierszy { get; set; }
         public string[] rodzajKolumny { get; set; }
+        public char separator { get; set; }
     }
 
     class Program
     {
-        static void Main(string[] args)
+        public static void UstawienieDataSetu(DataTable dane, string[] rodzajKolumny, int iloscKolumn, int iloscWierszy, bool czySuroweDane)
         {
-            StreamReader file = File.OpenText("conAustralian.json");
-            JsonSerializer serializer = new JsonSerializer();
-            AustralianConfig config = (AustralianConfig)serializer.Deserialize(file, typeof(AustralianConfig));
-
-
-            System.Data.DataTable dane = new DataTable("TablicaDanych");
-
             DataColumn column;
             DataRow row;
 
-            for(int i=0; i<config.iloscKolumn; i++)
+            for (int i = 0; i < iloscKolumn; i++)
             {
                 column = new DataColumn();
-                if (config.rodzajKolumny[i] == "liczba")
-                    column.DataType = System.Type.GetType("System.Double");
+                if (czySuroweDane)
+                {
+                    if (rodzajKolumny[i] == "liczba")
+                        column.DataType = System.Type.GetType("System.Double");
+                    else
+                        column.DataType = System.Type.GetType("System.String");
+                }
                 else
-                    column.DataType = System.Type.GetType("System.String");
+                {
+                    column.DataType = System.Type.GetType("System.Double");
+                }
+
                 column.ColumnName = $"kol{i}";
                 dane.Columns.Add(column);
             }
 
-            for(int i=0; i<config.iloscWierszy; i++)
+            for (int i = 0; i < iloscWierszy; i++)
             {
                 row = dane.NewRow();
                 dane.Rows.Add(row);
             }
+        }
 
+        static void Main(string[] args)
+        {
+            JsonSerializer serializer = new JsonSerializer();
 
+            //wczytanie configa z zamiana znakow na liczby
+            StreamReader fileZnaki = File.OpenText("conZnakiNaLiczby.json");
+            Dictionary<string, double> tabZnakiNaLiczby = (Dictionary<string, double>)serializer.Deserialize(fileZnaki, typeof(Dictionary<string,double>));
+
+            //wczytanie configa z danymi o secie
+            StreamReader fileDane = File.OpenText("conAustralian.json");
+            AustralianConfig config = (AustralianConfig)serializer.Deserialize(fileDane, typeof(AustralianConfig));
+
+            //tworzenie 3 dataTabli: jeden z surowymi danymi (jak w secie), drugi z zamienionymi znakami na liczby, trzeci ze znormalizowanymi danymi
+            System.Data.DataTable dane = new DataTable("TablicaDanych");
+            System.Data.DataTable daneLiczbowe = new DataTable("TablicaDanychLiczbowych");
+            System.Data.DataTable daneZnormalizowane = new DataTable("TablicaDanychZnormalizowanych");
+            
+
+            UstawienieDataSetu(dane, config.rodzajKolumny, config.iloscKolumn, config.iloscWierszy, true);
+
+            //zapisywanie danych do dataTable
             string[] load = System.IO.File.ReadAllLines("australian.dat");
             int nrWiersza = 0;
             string[] wiersz;
 
             foreach (string line in load)
             {
-                wiersz = line.Split(' ');
+                wiersz = line.Split(config.separator);
                 for (int i = 0; i < wiersz.Length; i++)
                 {
                     wiersz[i] = wiersz[i].Replace('.', ',');
@@ -61,48 +84,53 @@ namespace MIW1
                 nrWiersza++;
             }
 
+            UstawienieDataSetu(daneLiczbowe, config.rodzajKolumny, config.iloscKolumn, config.iloscWierszy, false);
+            for (int i=0; i<config.iloscKolumn; i++)
+            {
+                for(int j=0; j<config.iloscWierszy; j++)
+                {
+                    if (config.rodzajKolumny[i] == "znak")
+                        daneLiczbowe.Rows[j][i] = tabZnakiNaLiczby[dane.Rows[j].Field<string>(j)];
+                    else
+                        daneLiczbowe.Rows[j][i] = dane.Rows[j][i];
+                }
+            }
+
+            //tworzenie tablic przetrzymujacych minimalne i maksymalne wartosci w kolumnach
             double[] tabMin = new double[config.iloscKolumn];
             double[] tabMax = new double[config.iloscKolumn];
 
+            //ustawianie startowych wartosci dla tablic
             for(int i=0; i<config.iloscKolumn; i++)
             {
-                tabMin[i] = Convert.ToDouble(dane.Rows[0][i]);
-                tabMax[i] = Convert.ToDouble(dane.Rows[0][i]);
+                tabMin[i] = Convert.ToDouble(daneLiczbowe.Rows[0][i]);
+                tabMax[i] = Convert.ToDouble(daneLiczbowe.Rows[0][i]);
             }
 
+            //wyszukiwanie wartosci min/max dla tablic
             for(int i=0; i<config.iloscKolumn; i++)
             {
                 for(int j=1; j<config.iloscWierszy; j++)
                 {
-                    if (dane.Rows[j].Field<double>(i) < tabMin[i])
-                        tabMin[i] = dane.Rows[j].Field<double>(i);
-                    if (dane.Rows[j].Field<double>(i) > tabMax[i])
-                        tabMax[i] = dane.Rows[j].Field<double>(i);
+                    if (daneLiczbowe.Rows[j].Field<double>(i) < tabMin[i])
+                        tabMin[i] = daneLiczbowe.Rows[j].Field<double>(i);
+                    if (daneLiczbowe.Rows[j].Field<double>(i) > tabMax[i])
+                        tabMax[i] = daneLiczbowe.Rows[j].Field<double>(i);
                 }
             }
 
-            System.Data.DataTable daneZnormalizowane = new DataTable("TablicaDanychZnormalizowanych");
 
-            for (int i = 0; i < config.iloscKolumn; i++)
-            {
-                column = new DataColumn();
-                column.DataType = System.Type.GetType("System.Double");
-                column.ColumnName = $"kol{i}";
-                daneZnormalizowane.Columns.Add(column);
-            }
-            for (int j = 0; j < config.iloscWierszy; j++)
-            {
-                row = daneZnormalizowane.NewRow();
-                daneZnormalizowane.Rows.Add(row);
-            }
+            UstawienieDataSetu(daneZnormalizowane, config.rodzajKolumny, config.iloscKolumn, config.iloscWierszy, false);
 
+            //normalizacja danych
             for(int i=0; i<config.iloscWierszy; i++)
             {
                 for(int j=0; j<config.iloscKolumn; j++)
                 {
-                    daneZnormalizowane.Rows[i][j] = (dane.Rows[i].Field<double>(j) - tabMin[j]) / (tabMax[j] - tabMin[j]);
+                    daneZnormalizowane.Rows[i][j] = (daneLiczbowe.Rows[i].Field<double>(j) - tabMin[j]) / (tabMax[j] - tabMin[j]);
                 }
             }
+            
 
 
             /*
@@ -123,6 +151,7 @@ namespace MIW1
             
 
             Console.WriteLine($"Nazwa : {nrWiersza}");
+            //Console.WriteLine($"q: {tabZnakiNaLiczby["q"]}");
             System.Console.ReadKey();
         }
     }
