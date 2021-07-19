@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
+using ClosedXML;
+using ClosedXML.Excel;
 
 namespace MIW1
 {
@@ -17,12 +19,13 @@ namespace MIW1
 
     class Program
     {
+        //bool czySurowe dane sluzy do okreslenia czy pracujemy na pierwszym datatable (tam gdzie potrzebne jest ustawienie odpowiedniego rodzaju kolum)
         public static void UstawienieDataSetu(DataTable dane, string[] rodzajKolumny, int iloscKolumn, int iloscWierszy, bool czySuroweDane)
         {
             DataColumn column;
             DataRow row;
 
-            for (int i = 0; i < iloscKolumn; i++)
+            for (int i = 0; i < iloscKolumn - 1; i++)
             {
                 column = new DataColumn();
                 if (czySuroweDane)
@@ -40,6 +43,11 @@ namespace MIW1
                 column.ColumnName = $"kol{i}";
                 dane.Columns.Add(column);
             }
+            //ostatnia kolumna jest zawsze stringiem, bo to klasa dec
+            column = new DataColumn();
+            column.DataType = System.Type.GetType("System.String");
+            column.ColumnName = $"kol{iloscKolumn - 1}";
+            dane.Columns.Add(column);
 
             for (int i = 0; i < iloscWierszy; i++)
             {
@@ -48,7 +56,84 @@ namespace MIW1
             }
         }
 
-        static void Main(string[] args)
+        public static void ZapisDoXXX(DataTable dane)
+        {
+            var workbook = new XLWorkbook();
+            workbook.Worksheets.Add(dane, "zad1a");
+            workbook.SaveAs("../../../dane.xlsx");
+        }
+        public static void ZapisDoJson(DataTable dane)
+        {
+            var json = JsonConvert.SerializeObject(dane);
+            File.WriteAllText("../../../dane.json", json);
+        }
+        public static void ZapisDoTXXXT(DataTable dane)
+        {
+            using StreamWriter file = new StreamWriter("../../../dane.txt");
+            string nowaLinia;
+            for (int i = 0; i < dane.Rows.Count; i++)
+            {
+                nowaLinia = "";
+                for (int j = 0; j < dane.Columns.Count; j++)
+                {
+                    nowaLinia += dane.Rows[i][j] + " ";
+                }
+                //nowaLinia += dane.Rows[i].Field<string>(dane.Columns.Count - 1);   
+                file.WriteLine(nowaLinia);
+            }
+        }
+
+        public static void MenuZapisywania(DataTable daneNormalne, DataTable daneZnormalizowane, bool czyPoNormalizacji)
+        {
+            Console.WriteLine("\nCzy chcesz zapisac dane? [y-tak]");
+            if(Console.ReadKey().KeyChar == 'y')
+            {
+                if (czyPoNormalizacji)
+                {
+                    char wybor;
+                    Console.WriteLine("\nCzy zapisac dane normalne czy znormalizowane? [1 - normalne / 2-znormalizowane / inny znak - anuluj zapis]");
+                    wybor = Console.ReadKey().KeyChar;
+                    if (wybor == '1')
+                    {
+                        Console.WriteLine("\nWybierz metode zapisu: [1 - xlsx / 2 - json / 3 - txt / inny znak - anuluj zapis]");
+                        wybor = Console.ReadKey().KeyChar;
+                        if (wybor == '1')
+                            ZapisDoXXX(daneNormalne);
+                        else if (wybor == '2')
+                            ZapisDoJson(daneNormalne);
+                        else if (wybor == '3')
+                            ZapisDoTXXXT(daneNormalne);
+                    }
+                    else if (wybor == '2')
+                    {
+                        Console.WriteLine("\nWybierz metode zapisu: [1 - xlsx / 2 - json / 3 - txt / inny znak - anuluj zapis]");
+                        wybor = Console.ReadKey().KeyChar;
+                        if (wybor == '1')
+                            ZapisDoXXX(daneZnormalizowane);
+                        else if (wybor == '2')
+                            ZapisDoJson(daneZnormalizowane);
+                        else if (wybor == '3')
+                            ZapisDoTXXXT(daneZnormalizowane);
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("\nWybierz metode zapisu: [1 - xlsx / 2 - json / 3 - txt / inny znak - anuluj zapis]");
+                    char wybor = Console.ReadKey().KeyChar;
+                    if (wybor == '1')
+                        ZapisDoXXX(daneNormalne);
+                    else if (wybor == '2')
+                        ZapisDoJson(daneNormalne);
+                    else if (wybor == '3')
+                        ZapisDoTXXXT(daneNormalne);
+                }
+                
+
+            }
+            Console.WriteLine();
+        }
+
+        static int Main(string[] args)
         {
             JsonSerializer serializer = new JsonSerializer();
 
@@ -57,6 +142,35 @@ namespace MIW1
             Dictionary<string, double> tabZnakiNaLiczby = (Dictionary<string, double>)serializer.Deserialize(fileZnaki, typeof(Dictionary<string,double>));
 
 
+            //wyszukiwanie i wybieranie danych nowa metoda
+            DirectoryInfo d = new DirectoryInfo("./");
+            FileInfo[] tabDataSety = d.GetFiles("*.data"); //tablica wszystkich plikow .data w folderze
+
+
+            char nrSetu;
+            Console.WriteLine("Wybierz dane na ktorych chcesz pracowac: ");
+            for (int i = 0; i < tabDataSety.Length; i++)
+                Console.Write($"{tabDataSety[i].Name} [{i}]      ");
+            Console.WriteLine();
+            nrSetu = Console.ReadKey().KeyChar;
+            string nazwaSetu = tabDataSety[Int32.Parse(nrSetu.ToString())].Name; //wyciaganie nazwy wybranego setu
+            Console.WriteLine($"\n\nWybrano set: {nazwaSetu}");
+
+            //wyszukiwanie configa zawierajacego nazwe data setu
+            string nazwaConfigu="";
+            FileInfo[] tabConfigi = d.GetFiles("con*.json");
+            for (int i = 0; i < tabConfigi.Length; i++)
+                if (tabConfigi[i].Name.Contains(nazwaSetu.Replace(".data", "")))
+                    nazwaConfigu = tabConfigi[i].Name;
+            if (nazwaConfigu == "")
+            {
+                Console.WriteLine("Nie istnieje config dla danego setu");
+                return 0;
+            }
+                
+            Console.WriteLine($"\nWczytano config: {nazwaConfigu}\n");
+
+            /*
             char wczytanyZnak;
             string nazwaSetu;
             string nazwaConfigu;
@@ -68,28 +182,28 @@ namespace MIW1
 
             if (wczytanyZnak == '1')
             {
-                nazwaSetu = "australian.dat";
-                nazwaConfigu = "conAustralian.json";
+                nazwaSetu = "australian.data";
+                nazwaConfigu = "con_australian.json";
             }
             else if(wczytanyZnak == '2')
             {
-                nazwaSetu = "breast-cancer-wisconsin.data";
-                nazwaConfigu = "conBCW.json";
+                nazwaSetu = "bcw.data";
+                nazwaConfigu = "con_bcw.json";
             }
             else if(wczytanyZnak == '3')
             {
                 nazwaSetu = "crx.data";
-                nazwaConfigu = "conCRX.json";
+                nazwaConfigu = "con_crx.json";
             }
             else
             {
                 Console.WriteLine("Wybrano znak spoza zakresu!!!");
                 Console.WriteLine("Ustawiono wartosc domyslna - Australian");
-                nazwaSetu = "australian.dat";
+                nazwaSetu = "australian.data";
                 nazwaConfigu = "conAustralian.json";
             }
             Console.WriteLine();
-
+            */
 
 
             //wczytanie configa z danymi o secie
@@ -135,13 +249,16 @@ namespace MIW1
             }
 
             //ustawianie wartosci w danychLiczbowych - ewentualne zamienianie znakow na liczby
-            UstawienieDataSetu(daneLiczbowe, config.rodzajKolumny, config.iloscKolumn, config.iloscWierszy-indeksyBledow.Count, false);
-            for (int i=0; i<config.iloscKolumn; i++)
+            UstawienieDataSetu(daneLiczbowe, config.rodzajKolumny, config.iloscKolumn, config.iloscWierszy - indeksyBledow.Count, false);
+            for (int i = 0; i < config.iloscKolumn; i++)
             {
-                for(int j=0; j< config.iloscWierszy - indeksyBledow.Count; j++)
+                for (int j = 0; j < config.iloscWierszy - indeksyBledow.Count; j++)
                 {
                     if (config.rodzajKolumny[i] == "znak")
-                        daneLiczbowe.Rows[j][i] = tabZnakiNaLiczby[dane.Rows[j].Field<string>(i)];
+                        if (i == config.iloscKolumn - 1)
+                            daneLiczbowe.Rows[j][i] = dane.Rows[j][i];
+                        else
+                            daneLiczbowe.Rows[j][i] = tabZnakiNaLiczby[dane.Rows[j].Field<string>(i)];
                     else
                         daneLiczbowe.Rows[j][i] = dane.Rows[j][i];
                 }
@@ -153,18 +270,18 @@ namespace MIW1
             if(czyNormalizacja == 'y')
             {
                 //tworzenie tablic przetrzymujacych minimalne i maksymalne wartosci w kolumnach
-                double[] tabMin = new double[config.iloscKolumn];
-                double[] tabMax = new double[config.iloscKolumn];
+                double[] tabMin = new double[config.iloscKolumn-1];
+                double[] tabMax = new double[config.iloscKolumn-1];
 
                 //ustawianie startowych wartosci dla tablic
-                for (int i = 0; i < config.iloscKolumn; i++)
+                for (int i = 0; i < config.iloscKolumn-1; i++)
                 {
                     tabMin[i] = Convert.ToDouble(daneLiczbowe.Rows[0][i]);
                     tabMax[i] = Convert.ToDouble(daneLiczbowe.Rows[0][i]);
                 }
 
-                //wyszukiwanie wartosci min/max dla tablic
-                for (int i = 0; i < config.iloscKolumn; i++)
+                //wyszukiwanie wartosci min/max dla tablic oprocz ostatniej kolumny
+                for (int i = 0; i < config.iloscKolumn-1; i++)
                 {
                     for (int j = 1; j < config.iloscWierszy - indeksyBledow.Count; j++)
                     {
@@ -182,7 +299,10 @@ namespace MIW1
                 {
                     for (int j = 0; j < config.iloscKolumn; j++)
                     {
-                        daneZnormalizowane.Rows[i][j] = (daneLiczbowe.Rows[i].Field<double>(j) - tabMin[j]) / (tabMax[j] - tabMin[j]);
+                        if (j == config.iloscKolumn - 1)
+                            daneZnormalizowane.Rows[i][j] = daneLiczbowe.Rows[i][j];
+                        else
+                            daneZnormalizowane.Rows[i][j] = (daneLiczbowe.Rows[i].Field<double>(j) - tabMin[j]) / (tabMax[j] - tabMin[j]);
                     }
                 }
 
@@ -190,29 +310,38 @@ namespace MIW1
                 for (int i = 0; i < daneZnormalizowane.Rows.Count; i++)
                 {
                     for (int j = 0; j < daneZnormalizowane.Columns.Count; j++)
-                        Console.Write($"{Math.Round(daneZnormalizowane.Rows[i].Field<double>(j), 2)} ");
+                    {
+                        if (j == daneZnormalizowane.Columns.Count - 1)
+                            Console.Write($"{daneZnormalizowane.Rows[i].Field<string>(j)} ");
+                        else
+                            Console.Write($"{Math.Round(daneZnormalizowane.Rows[i].Field<double>(j), 2)} ");
+                    }   
                     Console.WriteLine();
                 }
+                MenuZapisywania(dane, daneZnormalizowane, true);
             }
             else
             {
-                Console.WriteLine("\n\nDane liczbowe: \n");
+                Console.WriteLine("\n\nDane wczytane: \n");
                 for(int i=0; i<config.iloscWierszy - indeksyBledow.Count; i++)
                 {
                     for(int j=0; j<config.iloscKolumn; j++)
                     {
-                        Console.Write($"{Math.Round(daneLiczbowe.Rows[i].Field<double>(j), 2)} ");
+                        Console.Write($"{dane.Rows[i][j]} ");
                     }
                     Console.WriteLine();
                 }
+                MenuZapisywania(dane, daneZnormalizowane, false);
             }
 
+            Console.WriteLine();
             Console.WriteLine($"Ilosc wierszy : {nrWiersza}");
             //Console.WriteLine($"q: {tabZnakiNaLiczby["q"]}");
             Console.WriteLine("Brak wartosci w wierszach: ");
             foreach (int indeks in indeksyBledow)
                 Console.Write($"{indeks} ");
-            System.Console.ReadKey();
+            Console.WriteLine("\nKoniec przedstawienia!");
+            return 0;
         }
     }
 }
